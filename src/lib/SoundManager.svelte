@@ -45,7 +45,11 @@
     // Ensure Tone.js is started
     Tone.start();
 
-    const context = new Tone.Context({ latencyHint: 'interactive' });
+    const context = new Tone.Context({ 
+          latencyHint: 'interactive',
+          lookAhead : 0.00,
+          updateInterval : 0.00,
+      });
     Tone.setContext(context);
 
     const maxPolyphony = 32; // or any other suitable number

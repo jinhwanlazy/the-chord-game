@@ -85,12 +85,10 @@
   }
 
   export function resetGame() {
-    if (gameStatus === 'in-progress') {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      initializeGame();
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
     }
+    initializeGame();
   }
 
   function initializeGame() {

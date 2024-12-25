@@ -2,7 +2,7 @@ import type { Note } from '$lib/note';
 import { NoteSet, noteToString } from '$lib/note';
 import chordsData from './chords.json';
 
-export const allChordTypes = ['major', 'minor', 'diminished', 'augmented', 'suspended4', 'major7', 'dominant7', 'minor7', 'half-diminished7', 'diminished7', 'minor-major7', 'augmented7', 'augmented-major7', 'suspended7', 'major6', 'minor6'];
+export const allChordTypes = ['major', 'minor', 'diminished', 'augmented', 'suspended4', 'suspended2', 'major7', 'dominant7', 'minor7', 'half-diminished7', 'diminished7', 'minor-major7', 'augmented7', 'augmented-major7', 'suspended7', 'major6', 'minor6'];
 export type ChordType = typeof allChordTypes[number];
 
 export interface Chord {

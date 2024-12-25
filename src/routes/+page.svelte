@@ -1,14 +1,19 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import type { SvelteComponent } from 'svelte';
   import { onMount } from 'svelte';
   import ConfigPanel from '$lib/ConfigPanel.svelte';
   import SoundManager from '$lib/SoundManager.svelte';
   import { NoteSet } from '$lib/note';
-  import type { Chord } from '$lib/chord';
-  import { allChords } from '$lib/chord';
   import { globalConfig } from '$lib/config';
 
-  let ChordGame: { resetGame?: () => void } | null = null;
+  interface ChordGameInstance extends SvelteComponent {
+    resetGame: () => void;
+  }
+
+  let ChordGame: typeof SvelteComponent | null = null;
+  let chordGameComponent: ChordGameInstance | null = null;
+
   let currentNotes: NoteSet = new NoteSet();
   let currentChord: string = '';
   let isConfigPanelOpen = false;
@@ -22,6 +27,13 @@
     }
   });
 
+  function resetGame() {
+      gameStatus = 'not-started';
+      if (chordGameComponent) {
+          chordGameComponent.resetGame();
+      }
+  }
+
   function updateCurrentNotes(event: CustomEvent<NoteSet>) {
     currentNotes = event.detail;
   }
@@ -32,11 +44,8 @@
 
   function toggleConfigPanel() {
     isConfigPanelOpen = !isConfigPanelOpen;
-    if (isConfigPanelOpen && gameStatus === 'in-progress') {
-      gameStatus = 'not-started';
-      if (ChordGame && ChordGame.resetGame) {
-        ChordGame.resetGame();
-      }
+    if (isConfigPanelOpen && gameStatus !== 'not-started') {
+      resetGame();
     }
   }
 
@@ -68,6 +77,15 @@
           <span class="text-sm font-semibold">{currentChord}</span>
         </div>
       {/if}
+      <button
+        on:click={resetGame}
+        class="text-white p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400"
+        aria-label="Reset Game"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
       <SoundManager bind:this={soundManager} volume={$globalConfig.volume} on:notesChange={updateCurrentNotes} />
       <button
         on:click={toggleConfigPanel}
@@ -88,7 +106,9 @@
 
     <div class="flex-grow flex justify-center items-center" class:mr-[600px]={isConfigPanelOpen}>
       {#if browser && ChordGame}
-        <svelte:component this={ChordGame} 
+        <svelte:component 
+          this={ChordGame} 
+          bind:this={chordGameComponent}
           {currentNotes}
           {soundManager}
           on:updateChord={updateCurrentChord}
