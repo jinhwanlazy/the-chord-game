@@ -9,7 +9,7 @@ export interface Chord {
     notes: NoteSet;
     chordType: ChordType;
     rootNote: Note;
-    bottomNote: Note | undefined;
+    bottomNote: Note;
     tensionNotes: NoteSet;
 }
 
@@ -69,7 +69,7 @@ export function chordToString(chord: Chord, accidentalType: '#' | 'b' | 'random'
         symbol += '/' + noteToString(chord.bottomNote, false, accidentalType);
     }
     if (chord.tensionNotes.size == 1) {
-        if (chord.tensionNotes.bottomNote() % 12 + 12 - chord.rootNote == 14) {
+        if (chord.tensionNotes.bottomNote % 12 + 12 - chord.rootNote == 14) {
             symbol += 'add9';
         }
     }
@@ -124,7 +124,6 @@ export function findChord(notes: NoteSet): Chord | undefined {
     }
     const keyString = new NoteSet(notes.map(note => note % 12)).toString();
     const chords = chordDictionary.get(keyString);
-    console.log(chordDictionary.size);
     if (chords === undefined || chords.length === 0) {
         return undefined;
     }
@@ -138,12 +137,23 @@ export function findChord(notes: NoteSet): Chord | undefined {
             if (tensionNotes.every(note => note - rootNote > 12)) {
                 return chord;
             }
-        } else if (chord.bottomNote === notes.bottomNote() % 12) {
+        } else if (chord.bottomNote === notes.bottomNote % 12) {
             return chord;
         }
     }
     return undefined;
-    //return chords[0];
+}
+
+export function validateNotes(chord: Chord, notes: NoteSet, strict: boolean = true): boolean {
+  if ((strict || chord.bottomNote !== chord.rootNote) &&
+    notes.bottomNote % 12 !== chord.bottomNote) {
+    return false;
+  }
+
+  const normalizedNotes = new Set(notes.map(note => note % 12));
+  return normalizedNotes.size !== chord.notes.length + chord.tensionNotes.length &&
+    chord.notes.every(note => normalizedNotes.has(note)) &&
+    chord.tensionNotes.every(note => normalizedNotes.has(note));
 }
 
 

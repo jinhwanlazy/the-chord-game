@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import type { Note } from '$lib/note';
   import { NoteSet } from '$lib/note';
   import type { Chord } from '$lib/chord';
-  import { findChord, chordToString, allChords } from '$lib/chord';
+  import { findChord, chordToString, allChords, validateNotes } from '$lib/chord';
   import type { Config } from '$lib/config';
   import { globalConfig } from '$lib/config';
   import type SoundManager from '$lib/SoundManager.svelte';
 
   const dispatch = createEventDispatcher();
-
 
   let config: Config;
   globalConfig.subscribe(value => {
@@ -16,12 +16,13 @@
   });
   export let currentNotes: NoteSet = new NoteSet();
   export let soundManager: SoundManager;
-  
+
   $: ({ bpm, gridSize, chordSet, allowInversions } = config);
-  
+
   $: [numRows, numCols] = (gridSize || '4x4').split('x').map(Number);
   $: totalBoxes = numRows * numCols;
-  
+  $: beatDuration = 60000 / bpm;
+
   $: boxSize = (() => {
     const baseSize = 64; // 4rem or 64px
     const minSize = 32; // 2rem or 32px
@@ -36,20 +37,25 @@
 
   const visibleBoxesBeforeStart: number = 4; // Number of visible boxes before game starts
 
+  interface PlayerInput {
+    note: Note;
+    startTimestamp: number;
+    endTimestamp: number | undefined;
+  }
+
   // Game state
   let gameStatus: 'not-started' | 'in-progress' | 'finished' = 'not-started';
   let focusPosition: number = 0;
-  let score: number = 0;
-  let chordSymbols: Chord[] = [];
+  let totalScore: number = 0;
+  let targetChords: Chord[] = [];
   let currentChord: Chord | undefined;
-  let boxStatuses: { 
-      progress: number;
-      visible: boolean 
-      inputs: {
-          notes: NoteSet;
-          timestamp: number;
-          duration: number;
-      }[];
+  let activeInputs: Map<Note, PlayerInput> = new Map();
+  let boxStatuses: {
+      score: number;
+      visible: boolean
+      startTimestamp: number;
+      inputs: Set<PlayerInput>;
+      chordValidated: boolean;
   }[] = [];
 
   // Timing
@@ -68,7 +74,42 @@
   });
 
   $: {
-    updateCurrentChord(currentNotes);
+    updateCurrentNotes(currentNotes);
+  }
+
+  function updateCurrentNotes(notes: NoteSet) {
+    updateCurrentActiveInputs(notes);
+    updateCurrentChord(notes);
+
+    // Game start with first chord matches
+    if (gameStatus === 'not-started' &&
+      targetChords.length > 0 && targetChords[0] &&
+      validateNotes(targetChords[0], currentNotes)
+    ) {
+      startGame();
+    }
+
+    // Chord symbol displayed on top of the page
+    dispatch('updateChord', currentChord ? chordToString(currentChord, '#') : '');
+  }
+
+  function updateCurrentActiveInputs(notes: NoteSet) {
+    const now = performance.now();
+    for (const [note, input] of activeInputs) {
+      if (!notes.has(note)) {
+        input.endTimestamp = now;
+        activeInputs.delete(note);
+      }
+    }
+    notes.forEach(note => {
+      if (!activeInputs.has(note)) {
+        activeInputs.set(note, {
+          note,
+          startTimestamp: now,
+          endTimestamp: undefined,
+        });
+      }
+    });
   }
 
   function updateCurrentChord(notes: NoteSet) {
@@ -78,10 +119,6 @@
     } else {
       currentChord = chord_;
     }
-    if (gameStatus === 'not-started' && currentChord && chordToString(currentChord) === chordToString(chordSymbols[0])) {
-      startGame();
-    }
-    dispatch('updateChord', currentChord ? chordToString(currentChord) : '');
   }
 
   export function resetGame() {
@@ -93,27 +130,31 @@
 
   function initializeGame() {
     const chordIndices = Array.from(chordSet);
-    chordSymbols = Array(totalBoxes).fill(0).map(() => {
+    targetChords = Array(totalBoxes).fill(0).map(() => {
       const randomIndex = chordIndices[Math.floor(Math.random() * chordIndices.length)];
       return allChords[randomIndex];
     });
-    boxStatuses = Array(totalBoxes).fill(null).map((_, index) => ({ 
-      progress: 0, 
+    boxStatuses = Array(totalBoxes).fill(null).map((_, index) => ({
+      score: 0,
+      startTimestamp: 0,
       visible: index < visibleBoxesBeforeStart,
-      inputs: [],
+      inputs: new Set(),
+      chordValidated: false,
     }));
-    score = 0;
+    totalScore = 0;
     focusPosition = 0;
     gameStatus = 'not-started';
     dispatch('gameStatusChange', gameStatus);
-
   }
 
   function startGame() {
+    const now = performance.now();
     if (gameStatus === 'not-started') {
       gameStatus = 'in-progress';
-      lastBeatTime = performance.now();
-      prevTimestamp = performance.now();
+      focusPosition = 0;
+      boxStatuses[focusPosition].startTimestamp = now;
+      lastBeatTime = now;
+      prevTimestamp = now;
       requestAnimationFrame(gameLoop);
       dispatch('gameStatusChange', gameStatus);
 
@@ -124,22 +165,28 @@
     }
   }
 
-  function gameLoop(timestamp: number) {
-    const beatDuration = 60000 / bpm;
-    const elapsed = timestamp - lastBeatTime;
-    const deltaTime = timestamp - prevTimestamp;
+  function gameLoop(now: number) {
+    const elapsed = now - lastBeatTime;
 
     if (elapsed >= beatDuration) {
-      moveFocus();
-      lastBeatTime = timestamp;
+      updateBoxScore(now, beatDuration);
+      moveFocus(now);
+      lastBeatTime = now;
     }
+    if (focusPosition < totalBoxes) {
+      for (const [_, input] of activeInputs) {
+        boxStatuses[focusPosition].inputs.add(input);
+      }
+    }
+    //console.log('focusPosition:', focusPosition, 'totalBoxes:', totalBoxes, 'activeInputs:', activeInputs.size, 'boxInputs:', boxStatuses[focusPosition].inputs.size);
 
     if (gameStatus === 'in-progress') {
-      updateBoxProgress(deltaTime, beatDuration);
+      updateBoxScore(now, elapsed);
+      //updateBoxProgress(deltaTime, beatDuration);
       revealNextBox();
       animationFrameId = requestAnimationFrame(gameLoop);
     }
-    prevTimestamp = timestamp;
+    prevTimestamp = now;
   }
 
   function revealNextBox() {
@@ -149,14 +196,78 @@
     boxStatuses = boxStatuses; // Trigger reactivity
   }
 
-  function moveFocus() {
+  function updateBoxScore(now: number, elapsed: number) {
+    const box = boxStatuses[focusPosition];
+    const targetChord = targetChords[focusPosition];
+    const inputStartTimeThreshold = box.startTimestamp + beatDuration - Math.max(beatDuration / 16, 50);
+    let inputs = Array.from(box.inputs).sort((a, b) => a.startTimestamp - b.startTimestamp);
+
+    function isValidNote(note: Note) {
+      return targetChord.notes.has(note % 12) || targetChord.tensionNotes.has(note % 12);
+    }
+
+    function noteDuration(input: PlayerInput, now: number) {
+      return Math.min(input.endTimestamp ?? now, box.startTimestamp + beatDuration) - Math.max(input.startTimestamp, box.startTimestamp);
+    }
+
+    // -1 for any wrong note
+    let wrongNotePanalty = inputs.some(input => {
+      return input.startTimestamp <= inputStartTimeThreshold && !isValidNote(input.note);
+    }) ? -1 : 0;
+
+    // Filter out wrong notes and notes after the threshold
+    inputs = inputs.filter(input => {
+      return input.startTimestamp <= inputStartTimeThreshold && isValidNote(input.note);
+    });
+
+    if (focusPosition === 0) {
+      console.log('boxInputs:', box.inputs.size, 'inputs:', inputs.length);
+    }
+    if (inputs.length === 0) {
+      box.score = wrongNotePanalty;
+      return;
+    }
+
+    // 0-1 for coverage.
+    let coverage = 0;
+    let lastEndTimestamp = 0;
+    inputs.forEach(input => {
+      const startTimestamp = Math.max(input.startTimestamp, box.startTimestamp, lastEndTimestamp);
+      const endTimestamp = Math.min(input.endTimestamp ?? now, box.startTimestamp + beatDuration);
+      coverage += Math.max(endTimestamp - startTimestamp, 0) / elapsed;
+      lastEndTimestamp = endTimestamp;
+    });
+
+    // 0-1 for evenness.
+    // Use KL divergence to measure the evenness of note lengths
+    const noteDurationSum = inputs.reduce((acc, input) => acc + noteDuration(input, now), 0);
+    const kl = inputs.reduce((acc, input) => {
+      const duration = noteDuration(input, now) + 1e-8;
+      return acc + Math.log(noteDurationSum / inputs.length / duration) / inputs.length;
+    }, 0);
+    const evenness = Math.max(1 - 10 * kl, 0);
+
+
+    box.score = wrongNotePanalty + coverage * evenness;
+    if (!box.chordValidated) {
+      const allNotes = new NoteSet(inputs.map(input => input.note));
+      console.log('allNotes:', allNotes);
+      box.chordValidated = validateNotes(targetChord, allNotes);
+    }
+  }
+
+  function moveFocus(timestamp: number) {
+    console.log('moveFocus - timestamp:', timestamp);
     focusPosition++;
-    if (focusPosition > 0) {
-      score += bpm * boxStatuses[focusPosition - 1].progress;
+    const prevBox = boxStatuses[focusPosition - 1];
+    if (focusPosition > 0 && prevBox.chordValidated) {
+      totalScore += bpm * chordSet.size * prevBox.score;
     }
     if (focusPosition >= totalBoxes) {
       endGame();
     } else {
+      const box = boxStatuses[focusPosition];
+      box.startTimestamp = timestamp;
       if (soundManager && soundManager.playBeep) {
         soundManager.playBeep();
       }
@@ -168,35 +279,30 @@
     soundManager = event.detail;
   }
 
-  function updateBoxProgress(timeDelta: number, beatDuration: number) { 
-    const rest = 0.9;
-    const expectedChord = chordSymbols[focusPosition];
-    if (currentChord && chordToString(currentChord) === chordToString(expectedChord)) {
-      const prevProgress = boxStatuses[focusPosition].progress;
-      boxStatuses[focusPosition].progress = Math.min(
-              1, prevProgress + timeDelta / beatDuration * 1 / rest);
-    } 
-    boxStatuses = boxStatuses; // Trigger reactivity
-  }
+  //function updateBoxProgress(timeDelta: number, beatDuration: number) {
+  //  const rest = 0.9;
+  //  const expectedChord = targetChords[focusPosition];
+  //  if (currentChord && chordToString(currentChord) === chordToString(expectedChord)) {
+  //    const prevScore = boxStatuses[focusPosition].score;
+  //    boxStatuses[focusPosition].score = Math.min(
+  //            1, prevScore + timeDelta / beatDuration * 1 / rest);
+  //  }
+  //  boxStatuses = boxStatuses; // Trigger reactivity
+  //}
 
-  function getBoxColor(status: { progress: number; }): string {
-    const rN = 239, gN = 68, bN = 68; // Negative color: bg-red-500
-    const r0 = 55, g0 = 65, b0 = 81; // Neutral color:  bg-gray-700
-    const rP = 34, gP = 197, bP = 94; // Positive color: bg-green-500
-    const weight = Math.sqrt(Math.abs(status.progress));
-  
-    if (status.progress >= 0) {
-      const r = Math.round(r0 + weight * (rP - r0));
-      const g = Math.round(g0 + weight * (gP - g0));
-      const b = Math.round(b0 + weight * (bP - b0));
-      return `rgb(${r}, ${g}, ${b})`;
-    }
-    else {
-      const r = Math.round(r0 + weight * (rN - r0));
-      const g = Math.round(g0 + weight * (gN - g0));
-      const b = Math.round(b0 + weight * (bN - b0));
-      return `rgb(${r}, ${g}, ${b})`;
-    }
+  function getBoxColor(status: { score: number; chordValidated: boolean }): string {
+    const rN = 55, gN = 65, bN = 81; // Neutral color:  bg-gray-700
+    const rR = 239, gR = 68, bR = 68; // Color for negative score: bg-red-500
+    const rG = 34, gG = 197, bG = 94; // Color for positive score: bg-green-500
+    const rI = 234, gI = 179, bI = 88; // Color for not yet validated positive score: bg-yellow-500
+    const rT = status.score <= 0 ? rR : (status.chordValidated ? rG : rI);
+    const gT = status.score <= 0 ? gR : (status.chordValidated ? gG : gI);
+    const bT = status.score <= 0 ? bR : (status.chordValidated ? bG : bI);
+    const weight = Math.sqrt(Math.abs(status.score)); // sqrt for better color contrast
+    const r = Math.round(rN + weight * (rT - rN));
+    const g = Math.round(gN + weight * (gT - gN));
+    const b = Math.round(bN + weight * (bT - bN));
+    return `rgb(${r}, ${g}, ${b})`;
   }
 
   function endGame() {
@@ -208,11 +314,11 @@
 </script>
 
 <div class="game-container relative">
-  <div class="score mb-4">Score: {Math.floor(score)}</div>
+  <div class="score mb-4">Score: {Math.floor(totalScore)}</div>
   <div class="chord-grid-container relative">
     {#if gameStatus === 'not-started'}
       <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10">
-        <button 
+        <button
           class="play-button"
           on:click={startGame}
           aria-label="Start Game"
@@ -224,15 +330,15 @@
       </div>
     {/if}
     <div class="chord-grid" style="grid-template-columns: repeat({numCols}, minmax(0, 1fr));">
-      {#each chordSymbols as chord, index}
-        <div 
-          class="chord-box" 
+      {#each targetChords as chord, index}
+        <div
+          class="chord-box"
           style="
-            background-color: {getBoxColor(boxStatuses[index])}; 
+            background-color: {getBoxColor(boxStatuses[index])};
             width: {boxSize}px;
             height: {boxSize}px;
           "
-          class:ring-2={index === focusPosition} 
+          class:ring-2={index === focusPosition}
           class:ring-blue-500={index === focusPosition}
           class:pulsating={index === focusPosition}
         >
