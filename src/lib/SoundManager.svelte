@@ -42,9 +42,7 @@
   }
 
   function initializeSynth() {
-    // Ensure Tone.js is started
-    Tone.start();
-
+    // Tone.start();
     const context = new Tone.Context({
           latencyHint: 'interactive',
           lookAhead : 0.00,
@@ -128,7 +126,7 @@
 
   export function playBeep() {
     if (!isMuted) {
-      beepSynth.volume.value = Tone.gainToDb(volume / 100);
+      console.log('beep', Tone.now());
       beepSynth.triggerAttackRelease("C5", "16n");
     }
   }

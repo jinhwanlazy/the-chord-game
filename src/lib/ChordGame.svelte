@@ -17,7 +17,7 @@
   export let currentNotes: NoteSet = new NoteSet();
   export let soundManager: SoundManager;
 
-  $: ({ bpm, gridSize, chordSet, allowInversions } = config);
+  $: ({ bpm, gridSize, chordSet, addInversion } = config);
 
   $: [numRows, numCols] = (gridSize || '4x4').split('x').map(Number);
   $: totalBoxes = numRows * numCols;
@@ -160,7 +160,7 @@
 
       // Play beep sound when the game starts
       if (soundManager && soundManager.playBeep) {
-        soundManager.playBeep();
+        //soundManager.playBeep();
       }
     }
   }
@@ -274,21 +274,6 @@
     }
     boxStatuses = boxStatuses; // Trigger reactivity
   }
-
-  function onSoundManagerReady(event: CustomEvent) {
-    soundManager = event.detail;
-  }
-
-  //function updateBoxProgress(timeDelta: number, beatDuration: number) {
-  //  const rest = 0.9;
-  //  const expectedChord = targetChords[focusPosition];
-  //  if (currentChord && chordToString(currentChord) === chordToString(expectedChord)) {
-  //    const prevScore = boxStatuses[focusPosition].score;
-  //    boxStatuses[focusPosition].score = Math.min(
-  //            1, prevScore + timeDelta / beatDuration * 1 / rest);
-  //  }
-  //  boxStatuses = boxStatuses; // Trigger reactivity
-  //}
 
   function getBoxColor(status: { score: number; chordValidated: boolean }): string {
     const rN = 55, gN = 65, bN = 81; // Neutral color:  bg-gray-700
