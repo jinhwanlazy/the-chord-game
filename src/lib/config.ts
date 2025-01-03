@@ -7,14 +7,15 @@ export type Config = {
   bpm: number;
   gridSize: string;
   chordSet: Set<number>;
-  allowInversions: boolean;
+  addInversion: boolean;
+  addTensions: boolean;
 };
 
 const defaultChordSet = new Set(allChords
     .map((_, index) => index)
     .filter(index => {
         const chord = allChords[index];
-        return ['major'].includes(chord.chordType) 
+        return ['major'].includes(chord.chordType)
             && [0, 2, 4, 5, 7, 9, 11].includes(chord.rootNote)
             && (chord.rootNote === chord.bottomNote)
             && chord.tensionNotes.size === 0;
@@ -27,7 +28,8 @@ const defaultConfig: Config = {
   bpm: 45,
   gridSize: '4x4',
   chordSet: defaultChordSet,
-  allowInversions: false
+  addInversion: false,
+  addTensions: false,
 };
 
 export const globalConfig = writable<Config>(defaultConfig);

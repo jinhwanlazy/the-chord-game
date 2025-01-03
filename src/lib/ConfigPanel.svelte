@@ -19,12 +19,12 @@
   });
 
   // Config state
-  let chordSetMatrix: boolean[][] = new Array(12).fill(0).map(() => 
+  let chordSetMatrix: boolean[][] = new Array(12).fill(0).map(() =>
       allChordTypes.map(() => false)
   );
 
   function updateChordSetMatrix() {
-      chordSetMatrix = Array(12).fill(0).map(() => 
+      chordSetMatrix = Array(12).fill(0).map(() =>
           allChordTypes.map(() => false)
       );
       for (const chordIndex of localConfig.chordSet) {
@@ -44,11 +44,17 @@
     const selectedChordIndices = new Set<number>();
     allChords.forEach((chord, index) => {
       const selected = chordSetMatrix[chord.rootNote][chordTypeToNumber(chord.chordType)];
-      if (selected && chord.rootNote === chord.bottomNote && chord.tensionNotes.size == 0) {
+      console.log(index, selected, chord);
+      if (selected &&
+        (localConfig.addInversion || chord.rootNote === chord.bottomNote) &&
+        (localConfig.addTensions || chord.tensionNotes.size == 0)
+      ) {
         selectedChordIndices.add(index);
       }
     });
     $globalConfig = localConfig;
+    console.log('selected:', selectedChordIndices.size, 'all:', allChords.length);
+    console.log(localConfig);
 
     const newConfig = {
       ...localConfig,
@@ -98,11 +104,11 @@
     <label class="flex items-center">
       <input
         type="checkbox"
-        bind:checked={localConfig.allowInversions}
+        bind:checked={localConfig.addInversion}
         on:change={updateConfig}
         class="form-checkbox h-4 w-4 text-blue-600"
       />
-      <span class="ml-2">Allow Chord Inversions</span>
+      <span class="ml-2">Add Inversion Chords</span>
     </label>
   </div>
 
@@ -166,7 +172,7 @@
 
   <div class="mt-8">
     <a
-      href="https://github.com/yourusername/your-repo-name"
+      href="https://github.com/jinhwanlazy/the-chord-game"
       target="_blank"
       rel="noopener noreferrer"
       class="text-blue-400 hover:text-blue-300"

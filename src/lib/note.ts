@@ -96,6 +96,14 @@ export class NoteSet implements Iterable<Note> {
     return this.notes.filter(predicate);
   }
 
+  some(predicate: (value: Note, index: number, array: Note[]) => boolean): boolean {
+    return this.notes.some(predicate);
+  }
+
+  every(predicate: (value: Note, index: number, array: Note[]) => boolean): boolean {
+    return this.notes.every(predicate);
+  }
+
   toString(): string {
     return `NoteSet(${this.notes.join(', ')})`;
   }
@@ -104,11 +112,11 @@ export class NoteSet implements Iterable<Note> {
     return [...this.notes];
   }
 
-  bottomNote(): Note | undefined {
-    return this.notes[0];
+  get bottomNote(): Note | undefined {
+    return this.notes.length > 0 ? this.notes[0] : undefined;
   }
 
-  topNote(): Note | undefined {
-    return this.notes[this.notes.length - 1];
+  get topNote(): Note | undefined {
+    return this.notes.length > 0 ? this.notes[this.notes.length - 1] : undefined;
   }
 }

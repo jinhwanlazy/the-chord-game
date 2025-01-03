@@ -42,24 +42,24 @@
   }
 
   function initializeSynth() {
-    // Ensure Tone.js is started
-    Tone.start();
-
-    const context = new Tone.Context({ latencyHint: 'interactive' });
+    // Tone.start();
+    const context = new Tone.Context({
+          latencyHint: 'interactive',
+          lookAhead : 0.00,
+          updateInterval : 0.001,
+      });
     Tone.setContext(context);
 
-    const maxPolyphony = 32; // or any other suitable number
-  
     synth = new Tone.PolySynth(Tone.Synth).toDestination();
     synth.set({
       oscillator: {
-        type: 'triangle'
+        type: 'triangle8'
       },
       envelope: {
-        attack: 0.001,  // Reduced from 0.005
-        decay: 0.05,    // Reduced from 0.1
-        sustain: 0.2,   // Slightly reduced from 0.3
-        release: 0.1    // Significantly reduced from 1
+        attack: 0.001,
+        decay: 0.15,
+        sustain: 0.2,
+        release: 0.1
       }
     });
   }
@@ -126,7 +126,7 @@
 
   export function playBeep() {
     if (!isMuted) {
-      beepSynth.volume.value = Tone.gainToDb(volume / 100);
+      console.log('beep', Tone.now());
       beepSynth.triggerAttackRelease("C5", "16n");
     }
   }
