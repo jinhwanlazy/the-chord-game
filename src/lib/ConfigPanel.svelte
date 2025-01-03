@@ -172,7 +172,7 @@
 
   <div class="mt-8">
     <a
-      href="https://github.com/yourusername/your-repo-name"
+      href="https://github.com/jinhwanlazy/the-chord-game"
       target="_blank"
       rel="noopener noreferrer"
       class="text-blue-400 hover:text-blue-300"
